@@ -4,7 +4,7 @@
 struct Fileinfo
 {
 	unsigned char _ch;
-	int _count;
+	long _count;
 	string _code;
 	Fileinfo(unsigned char ch=0)
 		:_ch(ch)
@@ -41,14 +41,19 @@ public:
 	{
 		assert(filename);
 		//打开待压缩文件
-		FILE* fOut = fopen(filename, "rb");
-		assert(fOut);
+		FILE* fOutfile = fopen(filename, "rb");
+		assert(fOutfile);
 		//生成对应的Huffman编码
-		char ch = fgetc(fOut);
+		int num = 0;
+		char ch = fgetc(fOutfile);
 		while (ch != EOF)
 		{
-			_info[(unsigned char)ch]._count++;
-			ch = fgetc(fOut);
+			//if (ch != '\r')
+			{
+				num++;
+				_info[(unsigned char)ch]._count++;
+			}
+			ch = fgetc(fOutfile);
 		}
 
 		HuffmanTree<Fileinfo> t;
@@ -58,36 +63,36 @@ public:
 		//压缩文件
 		string compressFile = filename;
 		compressFile += ".compress";
-		FILE* fpt = fopen(compressFile.c_str(), "w");
-		assert(fpt);
+		FILE* fIncompress = fopen(compressFile.c_str(), "wb");
+		assert(fIncompress);
 
-		fseek(fOut, 0, SEEK_SET);
-		ch = fgetc(fOut);
+		fseek(fOutfile, 0, SEEK_SET);
+		ch = fgetc(fOutfile);
 
 		char inch = 0;
-		int num = 0;
+		int index = 0;
 		while (ch != EOF)
 		{
-			for (size_t i = 0;i < _info[(unsigned char)ch]._code.size();++i)
+			string& code = _info[(unsigned char)ch]._code;
+			for (size_t i = 0;i < code.size();++i)
 			{
-
 				inch <<= 1;
-				if (_info[ch]._code[i] == '1')
+				if (code[i] == '1')
 					inch |= 1;
 
-				if (++num % 8 == 0)
+				if (++index==8)
 				{
-					fputc(inch, fpt);
+					fputc(inch, fIncompress);
 					inch = 0;
-					num = 0;
+					index = 0;
 				}
 			}
-			ch = fgetc(fOut);
+			ch = fgetc(fOutfile);
 		}
-		if (num != 0)
+		if (index != 0)
 		{
-			inch <<= (8 - num);
-			fputc(inch, fpt);
+			inch <<= (8 - index);
+			fputc(inch, fIncompress);
 		}
 		//写配置文件
 		char str[128];
@@ -95,7 +100,10 @@ public:
 		configcompress += ".config";
 		FILE* finconfig = fopen(configcompress.c_str(), "w");
 		assert(finconfig);
-
+		string numInfo;
+		numInfo += itoa(num, str, 10);
+		numInfo += "\n";
+		fputs(numInfo.c_str(), finconfig);
 		for (size_t i = 0;i < 256;++i)
 		{
 			string chInfo;
@@ -108,14 +116,108 @@ public:
 				fputs(chInfo.c_str(), finconfig);
 			}
 		}
-		fclose(fOut);
-		fclose(fpt);
+		fclose(fOutfile);
+		fclose(fIncompress);
 		fclose(finconfig);
 		return true;
 	}
 
+	//解压缩
+	bool UnCompress(const char* Filename)
+	{
+		//读取配置文件
+		string configFile = Filename;
+		configFile += ".config";
+		FILE* FOutconFigfile = fopen(configFile.c_str(), "r");
+		assert(FOutconFigfile);
+
+		string line;
+		_Readline(FOutconFigfile, line);
+		int num = atoi(line.c_str());
+		line.clear();
+		while (_Readline(FOutconFigfile, line))
+		{
+			
+
+			if (!line.empty())
+			{
+				unsigned char ch = line[0];
+				_info[ch]._count = atoi(line.substr(2).c_str());
+				line.clear();
+			}
+			else
+			{
+				line = "\n";
+			}
+		}
+
+		//重建Huffman树
+		HuffmanTree<Fileinfo> t;
+		Fileinfo invalue;
+		t.CreatHuffmanTree(_info, 256, invalue);
+		HuffmanTreeNode<Fileinfo>* root = t.GetRootNode();
+
+		//解压缩
+		string compressFile = Filename;
+		compressFile += ".compress";
+		FILE* fOutcompress = fopen(compressFile.c_str(), "r");
+		assert(fOutcompress);
+
+		string uncompressFile = Filename;
+		uncompressFile += ".uncompress";
+		FILE* fInuncompress = fopen(uncompressFile.c_str(), "w");
+		assert(fInuncompress);
+
+		char ch = fgetc(fOutcompress);
+		HuffmanTreeNode<Fileinfo>* cur = root;
+
+		int index = 8;
+		while (1)
+		{
+			--index;
+			if (ch&(1 << index))
+			{
+				cur = cur->_right;
+			}
+			else
+				cur = cur->_left;
+			if (cur->_left == nullptr&&cur->_right == nullptr)
+			{
+				fputc(cur->weight._ch, fInuncompress);
+				if (cur->weight._ch == 'i')
+				{
+					int i = 0;
+				}
+				cur = root;
+				if (--num == 0)
+					break;
+			}
+			if (index == 0)
+			{
+				ch = fgetc(fOutcompress);
+				index = 8;
+			}	
+		}
+		fclose(FOutconFigfile);
+		fclose(fOutcompress);
+		fclose(fInuncompress);
+
+		return true;
+	}
 	
 protected:
+	bool _Readline(FILE* filename, string& line)
+	{
+		char ch = fgetc(filename);
+		if (ch == EOF)
+			return false;
+		while (ch != EOF&&ch != '\n')
+		{
+			line += ch;
+			ch = fgetc(filename);
+		}
+		return true;
+	}
 	//生成Huffman编码
 	void _GenerateHuffmanCode(HuffmanTreeNode<Fileinfo>* root)
 	{
@@ -151,4 +253,5 @@ void Test1()
 {
 	FileCompress fc;
 	fc.Compress("Test.txt");
+	fc.UnCompress("Test.txt");
 }
