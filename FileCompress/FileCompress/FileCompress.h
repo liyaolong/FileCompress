@@ -1,6 +1,8 @@
 #pragma once
 #include"HuffmanTree.h"
 #include<algorithm>
+#include<bitset>
+#include<Windows.h>
 struct Fileinfo
 {
 	unsigned char _ch;
@@ -46,14 +48,14 @@ public:
 		//生成对应的Huffman编码
 		int num = 0;
 		char ch = fgetc(fOutfile);
-		while (ch != EOF)
+		//EOF可以作为文本文件的结束标志, 但不能作为二进制文件的结束符,
+		//feof函数既可以判断二进制文件, 又可以判断文本文件
+		while(!feof(fOutfile))
+		//while (ch != EOF)
 		{
-			//if (ch != '\r')
-			{
 				num++;
 				_info[(unsigned char)ch]._count++;
-			}
-			ch = fgetc(fOutfile);
+				ch = fgetc(fOutfile);
 		}
 
 		HuffmanTree<Fileinfo> t;
@@ -71,7 +73,8 @@ public:
 
 		char inch = 0;
 		int index = 0;
-		while (ch != EOF)
+		while(!feof(fOutfile))
+		//while (ch != EOF)
 		{
 			string& code = _info[(unsigned char)ch]._code;
 			for (size_t i = 0;i < code.size();++i)
@@ -83,6 +86,8 @@ public:
 				if (++index==8)
 				{
 					fputc(inch, fIncompress);
+					/*bitset<8> s(inch);
+					cout << s << endl;*/
 					inch = 0;
 					index = 0;
 				}
@@ -98,8 +103,9 @@ public:
 		char str[128];
 		string configcompress = filename;
 		configcompress += ".config";
-		FILE* finconfig = fopen(configcompress.c_str(), "w");
+		FILE* finconfig = fopen(configcompress.c_str(), "wb");
 		assert(finconfig);
+
 		string numInfo;
 		numInfo += itoa(num, str, 10);
 		numInfo += "\n";
@@ -128,7 +134,7 @@ public:
 		//读取配置文件
 		string configFile = Filename;
 		configFile += ".config";
-		FILE* FOutconFigfile = fopen(configFile.c_str(), "r");
+		FILE* FOutconFigfile = fopen(configFile.c_str(), "rb");
 		assert(FOutconFigfile);
 
 		string line;
@@ -137,8 +143,6 @@ public:
 		line.clear();
 		while (_Readline(FOutconFigfile, line))
 		{
-			
-
 			if (!line.empty())
 			{
 				unsigned char ch = line[0];
@@ -147,7 +151,11 @@ public:
 			}
 			else
 			{
-				line = "\n";
+				line.clear();
+				_Readline(FOutconFigfile, line);
+				unsigned char ch = '\n';
+				_info[ch]._count = atoi(line.substr(1).c_str());
+				line.clear();
 			}
 		}
 
@@ -160,12 +168,12 @@ public:
 		//解压缩
 		string compressFile = Filename;
 		compressFile += ".compress";
-		FILE* fOutcompress = fopen(compressFile.c_str(), "r");
+		FILE* fOutcompress = fopen(compressFile.c_str(), "rb");//读压缩文件时使用只读方式导致解压缩出现bug
 		assert(fOutcompress);
 
 		string uncompressFile = Filename;
 		uncompressFile += ".uncompress";
-		FILE* fInuncompress = fopen(uncompressFile.c_str(), "w");
+		FILE* fInuncompress = fopen(uncompressFile.c_str(), "wb");
 		assert(fInuncompress);
 
 		char ch = fgetc(fOutcompress);
@@ -184,14 +192,10 @@ public:
 			if (cur->_left == nullptr&&cur->_right == nullptr)
 			{
 				fputc(cur->weight._ch, fInuncompress);
-				if (cur->weight._ch == 'i')
-				{
-					int i = 0;
-				}
 				cur = root;
 				if (--num == 0)
 					break;
-			}
+			 }
 			if (index == 0)
 			{
 				ch = fgetc(fOutcompress);
@@ -252,6 +256,6 @@ private:
 void Test1()
 {
 	FileCompress fc;
-	fc.Compress("Test.txt");
+	//fc.Compress("Test.txt");
 	fc.UnCompress("Test.txt");
 }
